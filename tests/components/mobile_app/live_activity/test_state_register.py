@@ -7,20 +7,22 @@ from aiohttp.test_utils import TestClient
 import pytest
 
 from homeassistant.components.mobile_app.const import (
+    CONF_USER_ID,
     DATA_CONFIG_ENTRIES,
     DATA_LIVE_ACTIVITY_PENDING_STARTS,
     DATA_LIVE_ACTIVITY_STATE_REGISTER,
     DATA_LIVE_ACTIVITY_TOKENS,
     DOMAIN,
+    EVENT_LIVE_ACTIVITY_STARTED,
     SERVICE_SET_LIVE_ACTIVITY_STATE,
 )
-from homeassistant.core import HomeAssistant
+from homeassistant.core import EventOrigin, HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.setup import async_setup_component
 from homeassistant.util import dt as dt_util
 
-from tests.common import MockConfigEntry, MockUser
+from tests.common import MockConfigEntry, MockUser, async_capture_events
 from tests.test_util.aiohttp import AiohttpClientMocker
 
 
@@ -358,3 +360,34 @@ async def test_remove_entry_drops_register_and_pending(
 
     assert hass.data[DOMAIN][DATA_LIVE_ACTIVITY_STATE_REGISTER] == {}
     assert hass.data[DOMAIN][DATA_LIVE_ACTIVITY_PENDING_STARTS] == {}
+
+
+async def test_first_token_fires_started_event_rotation_does_not(
+    hass: HomeAssistant,
+    setup_iphone: tuple[str, str],
+    webhook_client: TestClient,
+) -> None:
+    """First token report fires the event; later rotations do not refire."""
+    webhook_id, _device_id = setup_iphone
+    entry = hass.data[DOMAIN][DATA_CONFIG_ENTRIES][webhook_id]
+    events = async_capture_events(hass, EVENT_LIVE_ACTIVITY_STARTED)
+
+    for token in ("a" * 64, "b" * 64):
+        resp = await webhook_client.post(
+            f"/api/webhook/{webhook_id}",
+            json={
+                "type": "live_activity_token",
+                "data": {
+                    "tag": "pizza-delivery",
+                    "push_token": token,
+                    "expires_at": dt_util.utcnow().timestamp() + 3600,
+                },
+            },
+        )
+        assert resp.status == HTTPStatus.OK
+    await hass.async_block_till_done()
+
+    assert len(events) == 1
+    assert events[0].data == {"webhook_id": webhook_id, "tag": "pizza-delivery"}
+    assert events[0].origin is EventOrigin.remote
+    assert events[0].context.user_id == entry.data[CONF_USER_ID]

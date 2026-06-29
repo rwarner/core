@@ -71,7 +71,13 @@ def remove_live_activity_token(
 
 @callback
 def mark_start_pending(hass: HomeAssistant, webhook_id: str, activity_tag: str) -> None:
-    """Record that a START push was just dispatched for this tag."""
+    """Record that a START push was just dispatched for this tag.
+
+    APNs allows roughly ten push-to-start activations per bundle in a short
+    window before the OS silently refuses further starts; the cooldown read
+    against this record prevents a flood of queued STARTs from burning that
+    budget when a device is offline.
+    """
     pending = hass.data[DOMAIN][DATA_LIVE_ACTIVITY_PENDING_STARTS]
     pending.setdefault(webhook_id, {})[activity_tag] = dt_util.utcnow()
 

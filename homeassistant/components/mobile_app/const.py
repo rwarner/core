@@ -60,6 +60,8 @@ MANUFACTURER_APPLE = "Apple"
 
 CLEAR_NOTIFICATION = "clear_notification"
 
+EVENT_LIVE_ACTIVITY_STARTED = f"{DOMAIN}_live_activity_started"
+
 LIVE_ACTIVITY_START_COOLDOWN_SECONDS = 3600  # released on token arrival or end
 
 SERVICE_SET_LIVE_ACTIVITY_STATE = "set_live_activity_state"

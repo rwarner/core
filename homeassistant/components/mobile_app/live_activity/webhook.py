@@ -8,11 +8,19 @@ import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_WEBHOOK_ID
-from homeassistant.core import HomeAssistant
+from homeassistant.core import EventOrigin, HomeAssistant
 from homeassistant.helpers import config_validation as cv
 
-from ..const import ATTR_LIVE_ACTIVITY_EXPIRES_AT, ATTR_PUSH_TOKEN, ATTR_TAG
-from ..helpers import empty_okay_response
+from ..const import (
+    ATTR_LIVE_ACTIVITY_EXPIRES_AT,
+    ATTR_PUSH_TOKEN,
+    ATTR_TAG,
+    ATTR_WEBHOOK_ID,
+    DATA_LIVE_ACTIVITY_TOKENS,
+    DOMAIN,
+    EVENT_LIVE_ACTIVITY_STARTED,
+)
+from ..helpers import empty_okay_response, registration_context
 from ..webhook import WEBHOOK_COMMANDS, validate_schema
 from .dispatcher import dispatch_live_activity_state
 from .store import (
@@ -39,10 +47,16 @@ async def webhook_update_live_activity_token(
     register holds state for this tag — which it does when the automation has
     advanced past the original START while the device was offline — the
     dispatcher fires a single UPDATE so the activity catches up to current
-    state without the server holding any prior message.
+    state without the server holding any prior message. The first token
+    report for ``(webhook_id, tag)`` also fires
+    ``mobile_app_live_activity_started`` so automations can observe the
+    confirmation; later token rotations rotate the stored token silently.
     """
     webhook_id = config_entry.data[CONF_WEBHOOK_ID]
     tag = data[ATTR_TAG]
+    is_first_token = tag not in hass.data[DOMAIN][DATA_LIVE_ACTIVITY_TOKENS].get(
+        webhook_id, ()
+    )
     store_live_activity_token(
         hass,
         webhook_id,
@@ -52,6 +66,13 @@ async def webhook_update_live_activity_token(
     )
     if get_live_activity_state(hass, webhook_id, tag) is not None:
         await dispatch_live_activity_state(hass, webhook_id, tag)
+    if is_first_token:
+        hass.bus.async_fire(
+            EVENT_LIVE_ACTIVITY_STARTED,
+            {ATTR_WEBHOOK_ID: webhook_id, ATTR_TAG: tag},
+            EventOrigin.remote,
+            context=registration_context(config_entry.data),
+        )
     return empty_okay_response()
 
 
