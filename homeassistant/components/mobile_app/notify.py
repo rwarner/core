@@ -60,14 +60,6 @@ from .util import supports_push
 
 _LOGGER = logging.getLogger(__name__)
 
-_USER_LEVEL_WARNING_KEYS = frozenset(
-    {
-        "rate_limit_exceeded_sending_notification",
-        "live_activity_start_already_pending",
-        "live_activity_invalid_stale_date",
-    }
-)
-
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -260,7 +252,10 @@ class MobileAppNotificationService(BaseNotificationService):
                 )
             await _send_message(async_get_clientsession(self.hass), entry, data)
         except HomeAssistantError as e:
-            if e.translation_key in _USER_LEVEL_WARNING_KEYS:
+            if e.translation_key in {
+                "rate_limit_exceeded_sending_notification",
+                "live_activity_start_already_pending",
+            }:
                 _LOGGER.warning(str(e))
             else:
                 _LOGGER.error(str(e))

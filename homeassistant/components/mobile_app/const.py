@@ -51,7 +51,6 @@ ATTR_START_LIVE_ACTIVITY_TOKEN = "start_live_activity_token"
 ATTR_LIVE_ACTIVITY_TOKEN = "live_activity_token"
 ATTR_LIVE_ACTIVITY_EVENT = "event"
 ATTR_LIVE_ACTIVITY_EXPIRES_AT = "expires_at"
-ATTR_STALE_DATE = "stale_date"
 ATTR_TAG = "tag"
 
 ATTR_TOKEN = "token"
@@ -62,7 +61,7 @@ CLEAR_NOTIFICATION = "clear_notification"
 
 EVENT_LIVE_ACTIVITY_STARTED = f"{DOMAIN}_live_activity_started"
 
-LIVE_ACTIVITY_START_COOLDOWN_SECONDS = 3600  # released early on token arrival or end
+LIVE_ACTIVITY_START_COOLDOWN_SECONDS = 3600
 
 ATTR_EVENT_DATA = "event_data"
 ATTR_EVENT_TYPE = "event_type"

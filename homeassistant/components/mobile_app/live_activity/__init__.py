@@ -18,7 +18,6 @@ from ..const import (
     ATTR_LIVE_ACTIVITY_EXPIRES_AT,
     ATTR_LIVE_ACTIVITY_TOKEN,
     ATTR_LIVE_UPDATE,
-    ATTR_STALE_DATE,
     ATTR_START_LIVE_ACTIVITY_TOKEN,
     ATTR_TAG,
     ATTR_TOKEN,
@@ -53,27 +52,13 @@ class LiveActivityPush:
 def prepare_live_activity_remote_push(
     hass: HomeAssistant, registration: Mapping[str, Any], data: dict[str, Any]
 ) -> tuple[dict[str, Any], CALLBACK_TYPE | None]:
-    """Return remote notification data and an optional on-success callback.
+    """Apply Live Activity routing to ``data`` and return the on-success callback.
 
-    Applies Live Activity routing; the callback, when set, runs after a
-    successful send. Raises ``HomeAssistantError`` if a START for this tag is
-    still within the cooldown window. Copies ``stale_date`` from ``data`` to
-    the top-level payload so the relay forwards it to APNs.
+    Raises ``HomeAssistantError`` if a START for this tag is still within the
+    cooldown window.
     """
     if not (resolved := resolve_live_activity_push(hass, registration, data)):
         return data, None
-
-    notification_data = data.get(ATTR_DATA) or {}
-    raw_stale_date = notification_data.get(ATTR_STALE_DATE)
-    if raw_stale_date is not None and (
-        isinstance(raw_stale_date, bool)
-        or not isinstance(raw_stale_date, (int, float))
-        or raw_stale_date <= 0
-    ):
-        raise HomeAssistantError(
-            translation_domain=DOMAIN,
-            translation_key="live_activity_invalid_stale_date",
-        )
 
     webhook_id = registration[ATTR_WEBHOOK_ID]
     success_callback: CALLBACK_TYPE | None = None
@@ -90,17 +75,17 @@ def prepare_live_activity_remote_push(
             )
         success_callback = partial(mark_start_pending, hass, webhook_id, resolved.tag)
 
-    outgoing: dict[str, Any] = {
-        **data,
-        ATTR_LIVE_ACTIVITY_TOKEN: resolved.token,
-        ATTR_DATA: {
-            **notification_data,
-            ATTR_LIVE_ACTIVITY_EVENT: resolved.event,
+    return (
+        {
+            **data,
+            ATTR_LIVE_ACTIVITY_TOKEN: resolved.token,
+            ATTR_DATA: {
+                **(data.get(ATTR_DATA) or {}),
+                ATTR_LIVE_ACTIVITY_EVENT: resolved.event,
+            },
         },
-    }
-    if raw_stale_date is not None:
-        outgoing[ATTR_STALE_DATE] = float(raw_stale_date)
-    return outgoing, success_callback
+        success_callback,
+    )
 
 
 def resolve_live_activity_push(

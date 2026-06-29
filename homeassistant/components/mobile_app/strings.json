@@ -25,9 +25,6 @@
     "error_sending_notification": {
       "message": "Error sending notification to {device_name}"
     },
-    "live_activity_invalid_stale_date": {
-      "message": "Live Activity stale_date must be a positive Unix timestamp"
-    },
     "live_activity_start_already_pending": {
       "message": "A Live Activity start for tag '{tag}' was sent recently; waiting for the device to confirm receipt before sending another"
     },

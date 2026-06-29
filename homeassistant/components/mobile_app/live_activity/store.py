@@ -68,12 +68,11 @@ def remove_live_activity_token(
 
 @callback
 def mark_start_pending(hass: HomeAssistant, webhook_id: str, activity_tag: str) -> None:
-    """Record that a START push was just dispatched for this tag.
+    """Record a START push for the cooldown to read against.
 
-    APNs allows roughly ten push-to-start activations per bundle in a short
-    window before the OS silently refuses further starts; the cooldown read
-    against this record prevents a flood of queued STARTs from burning that
-    budget when a device is offline.
+    iOS rate-limits push-to-start activations per bundle (about 10 per short
+    window per Apple DTS). The cooldown skips repeat STARTs for the same tag
+    so an offline device cannot drain that budget.
     """
     pending = hass.data[DOMAIN][DATA_LIVE_ACTIVITY_PENDING_STARTS]
     pending.setdefault(webhook_id, {})[activity_tag] = dt_util.utcnow()
@@ -99,13 +98,23 @@ def is_start_pending(hass: HomeAssistant, webhook_id: str, activity_tag: str) ->
 def clear_start_pending(
     hass: HomeAssistant, webhook_id: str, activity_tag: str
 ) -> None:
-    """Forget a pending START."""
+    """Drop the pending START record."""
     pending = hass.data[DOMAIN][DATA_LIVE_ACTIVITY_PENDING_STARTS]
     if (device_pending := pending.get(webhook_id)) is None:
         return
     device_pending.pop(activity_tag, None)
     if not device_pending:
         del pending[webhook_id]
+
+
+@callback
+def has_live_activity_token(
+    hass: HomeAssistant, webhook_id: str, activity_tag: str
+) -> bool:
+    """Return whether a per-activity token is stored for ``(webhook_id, tag)``."""
+    return activity_tag in hass.data[DOMAIN][DATA_LIVE_ACTIVITY_TOKENS].get(
+        webhook_id, {}
+    )
 
 
 @callback

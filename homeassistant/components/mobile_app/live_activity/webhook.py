@@ -16,13 +16,15 @@ from ..const import (
     ATTR_PUSH_TOKEN,
     ATTR_TAG,
     ATTR_WEBHOOK_ID,
-    DATA_LIVE_ACTIVITY_TOKENS,
-    DOMAIN,
     EVENT_LIVE_ACTIVITY_STARTED,
 )
 from ..helpers import empty_okay_response, registration_context
 from ..webhook import WEBHOOK_COMMANDS, validate_schema
-from .store import remove_live_activity_token, store_live_activity_token
+from .store import (
+    has_live_activity_token,
+    remove_live_activity_token,
+    store_live_activity_token,
+)
 
 
 @WEBHOOK_COMMANDS.register("live_activity_token")
@@ -36,18 +38,10 @@ from .store import remove_live_activity_token, store_live_activity_token
 async def webhook_update_live_activity_token(
     hass: HomeAssistant, config_entry: ConfigEntry, data: dict[str, Any]
 ) -> Response:
-    """Store a Live Activity APNs token and fire ``mobile_app_live_activity_started``.
-
-    The event fires only on the first token report per ``(webhook_id, tag)``,
-    so automations can react to the device confirming receipt of the START
-    push without also reacting to later token rotations.
-    """
+    """Store a Live Activity APNs token; fire the started event on first arrival."""
     webhook_id = config_entry.data[CONF_WEBHOOK_ID]
     tag = data[ATTR_TAG]
-    is_first_token = (
-        hass.data[DOMAIN][DATA_LIVE_ACTIVITY_TOKENS].get(webhook_id, {}).get(tag)
-        is None
-    )
+    is_first_token = not has_live_activity_token(hass, webhook_id, tag)
     store_live_activity_token(
         hass,
         webhook_id,
