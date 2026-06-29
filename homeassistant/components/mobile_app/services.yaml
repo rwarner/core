@@ -1,0 +1,23 @@
+set_live_activity_state:
+  fields:
+    device_id:
+      required: true
+      selector:
+        device:
+          integration: mobile_app
+    tag:
+      required: true
+      example: pizza-delivery
+      selector:
+        text:
+    content_state:
+      required: true
+      example: '{"status": "out for delivery", "eta_minutes": 12}'
+      selector:
+        object:
+    stale_date:
+      required: false
+      example: 1750000000
+      selector:
+        number:
+          mode: box

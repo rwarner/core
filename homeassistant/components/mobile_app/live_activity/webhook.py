@@ -14,7 +14,12 @@ from homeassistant.helpers import config_validation as cv
 from ..const import ATTR_LIVE_ACTIVITY_EXPIRES_AT, ATTR_PUSH_TOKEN, ATTR_TAG
 from ..helpers import empty_okay_response
 from ..webhook import WEBHOOK_COMMANDS, validate_schema
-from .store import remove_live_activity_token, store_live_activity_token
+from .dispatcher import dispatch_live_activity_state
+from .store import (
+    get_live_activity_state,
+    remove_live_activity_token,
+    store_live_activity_token,
+)
 
 
 @WEBHOOK_COMMANDS.register("live_activity_token")
@@ -28,14 +33,25 @@ from .store import remove_live_activity_token, store_live_activity_token
 async def webhook_update_live_activity_token(
     hass: HomeAssistant, config_entry: ConfigEntry, data: dict[str, Any]
 ) -> Response:
-    """Store a Live Activity APNs token sent by the iOS app."""
+    """Store a per-activity token; if state is recorded, reconcile it now.
+
+    Token arrival is the device confirming receipt of the START. If the
+    register holds state for this tag — which it does when the automation has
+    advanced past the original START while the device was offline — the
+    dispatcher fires a single UPDATE so the activity catches up to current
+    state without the server holding any prior message.
+    """
+    webhook_id = config_entry.data[CONF_WEBHOOK_ID]
+    tag = data[ATTR_TAG]
     store_live_activity_token(
         hass,
-        config_entry.data[CONF_WEBHOOK_ID],
-        data[ATTR_TAG],
+        webhook_id,
+        tag,
         data[ATTR_PUSH_TOKEN],
         data[ATTR_LIVE_ACTIVITY_EXPIRES_AT],
     )
+    if get_live_activity_state(hass, webhook_id, tag) is not None:
+        await dispatch_live_activity_state(hass, webhook_id, tag)
     return empty_okay_response()
 
 

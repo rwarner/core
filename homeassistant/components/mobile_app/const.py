@@ -22,6 +22,8 @@ DATA_DEVICES = "devices"
 
 DATA_LIVE_ACTIVITY_TOKENS = "live_activity_tokens"
 DATA_LIVE_ACTIVITY_CLEANUP_CANCEL = "live_activity_cleanup_cancel"
+DATA_LIVE_ACTIVITY_PENDING_STARTS = "live_activity_pending_starts"
+DATA_LIVE_ACTIVITY_STATE_REGISTER = "live_activity_state_register"
 DATA_STORE = "store"
 DATA_NOTIFY = "notify"
 DATA_PUSH_CHANNEL = "push_channel"
@@ -57,6 +59,12 @@ ATTR_TOKEN = "token"
 MANUFACTURER_APPLE = "Apple"
 
 CLEAR_NOTIFICATION = "clear_notification"
+
+LIVE_ACTIVITY_START_COOLDOWN_SECONDS = 3600  # released on token arrival or end
+
+SERVICE_SET_LIVE_ACTIVITY_STATE = "set_live_activity_state"
+ATTR_CONTENT_STATE = "content_state"
+ATTR_STALE_DATE = "stale_date"
 
 ATTR_EVENT_DATA = "event_data"
 ATTR_EVENT_TYPE = "event_type"

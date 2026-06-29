@@ -47,6 +47,8 @@ from .const import (
     DATA_DELETED_IDS,
     DATA_DEVICES,
     DATA_LIVE_ACTIVITY_CLEANUP_CANCEL,
+    DATA_LIVE_ACTIVITY_PENDING_STARTS,
+    DATA_LIVE_ACTIVITY_STATE_REGISTER,
     DATA_LIVE_ACTIVITY_TOKENS,
     DATA_PENDING_UPDATES,
     DATA_PUSH_CHANNEL,
@@ -59,6 +61,7 @@ from .const import (
 )
 from .helpers import async_is_local_only_user, savable_state
 from .http_api import RegistrationsView
+from .live_activity.service import async_register_services
 from .live_activity.store import async_cleanup_expired_live_activity_tokens
 from .timers import async_handle_timer_event
 from .util import async_create_cloud_hook, supports_push
@@ -90,6 +93,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         DATA_DEVICES: {},
         DATA_LIVE_ACTIVITY_TOKENS: app_config[DATA_LIVE_ACTIVITY_TOKENS],
         DATA_LIVE_ACTIVITY_CLEANUP_CANCEL: None,
+        DATA_LIVE_ACTIVITY_PENDING_STARTS: {},
+        DATA_LIVE_ACTIVITY_STATE_REGISTER: {},
         DATA_PUSH_CHANNEL: {},
         DATA_STORE: store,
         DATA_PENDING_UPDATES: {sensor_type: {} for sensor_type in SENSOR_TYPES},
@@ -112,6 +117,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     )
 
     websocket_api.async_setup_commands(hass)
+    async_register_services(hass)
 
     async def _handle_user_removed(event: Event) -> None:
         """Remove an entry when the user is removed."""
@@ -254,6 +260,8 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     webhook_id = entry.data[CONF_WEBHOOK_ID]
     hass.data[DOMAIN][DATA_DELETED_IDS].append(webhook_id)
     hass.data[DOMAIN][DATA_LIVE_ACTIVITY_TOKENS].pop(webhook_id, None)
+    hass.data[DOMAIN][DATA_LIVE_ACTIVITY_PENDING_STARTS].pop(webhook_id, None)
+    hass.data[DOMAIN][DATA_LIVE_ACTIVITY_STATE_REGISTER].pop(webhook_id, None)
     store = hass.data[DOMAIN][DATA_STORE]
     await store.async_save(savable_state(hass))
 
