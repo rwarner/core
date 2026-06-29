@@ -8,7 +8,7 @@ import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_WEBHOOK_ID
-from homeassistant.core import HomeAssistant
+from homeassistant.core import EventOrigin, HomeAssistant
 from homeassistant.helpers import config_validation as cv
 
 from ..const import (
@@ -18,7 +18,7 @@ from ..const import (
     ATTR_WEBHOOK_ID,
     EVENT_LIVE_ACTIVITY_STARTED,
 )
-from ..helpers import empty_okay_response
+from ..helpers import empty_okay_response, registration_context
 from ..webhook import WEBHOOK_COMMANDS, validate_schema
 from .store import remove_live_activity_token, store_live_activity_token
 
@@ -52,6 +52,8 @@ async def webhook_update_live_activity_token(
     hass.bus.async_fire(
         EVENT_LIVE_ACTIVITY_STARTED,
         {ATTR_WEBHOOK_ID: webhook_id, ATTR_TAG: tag},
+        EventOrigin.remote,
+        context=registration_context(config_entry.data),
     )
     return empty_okay_response()
 

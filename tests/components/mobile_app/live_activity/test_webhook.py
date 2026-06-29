@@ -13,7 +13,7 @@ from homeassistant.components.mobile_app.const import (
     DOMAIN,
     EVENT_LIVE_ACTIVITY_STARTED,
 )
-from homeassistant.core import Event, HomeAssistant
+from homeassistant.core import Event, EventOrigin, HomeAssistant
 from homeassistant.util import dt as dt_util
 
 from tests.common import async_capture_events, async_fire_time_changed
@@ -280,6 +280,8 @@ async def test_webhook_live_activity_token_fires_started_event(
     await hass.async_block_till_done()
     assert len(events) == 1
     assert events[0].data == {"webhook_id": webhook_id, "tag": "washer_cycle"}
+    assert events[0].origin is EventOrigin.remote
+    assert events[0].context.user_id is not None
 
 
 async def test_webhook_live_activity_token_clears_pending_start(

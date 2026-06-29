@@ -256,6 +256,7 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     webhook_id = entry.data[CONF_WEBHOOK_ID]
     hass.data[DOMAIN][DATA_DELETED_IDS].append(webhook_id)
     hass.data[DOMAIN][DATA_LIVE_ACTIVITY_TOKENS].pop(webhook_id, None)
+    hass.data[DOMAIN][DATA_LIVE_ACTIVITY_PENDING_STARTS].pop(webhook_id, None)
     store = hass.data[DOMAIN][DATA_STORE]
     await store.async_save(savable_state(hass))
 
