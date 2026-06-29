@@ -75,23 +75,18 @@ def mark_start_pending(hass: HomeAssistant, webhook_id: str, activity_tag: str) 
 
 @callback
 def is_start_pending(hass: HomeAssistant, webhook_id: str, activity_tag: str) -> bool:
-    """Return whether a START was dispatched within the cooldown window.
-
-    The cooldown is released early when the device reports the per-activity
-    token or when the activity is explicitly ended, so the window only matters
-    when neither happens — typically a device that has stayed offline since
-    the START was sent.
-    """
-    pending = hass.data[DOMAIN][DATA_LIVE_ACTIVITY_PENDING_STARTS]
-    device_pending = pending.get(webhook_id)
-    if device_pending is None or (sent_at := device_pending.get(activity_tag)) is None:
+    """Return whether a START was dispatched within the cooldown window."""
+    device_pending = hass.data[DOMAIN][DATA_LIVE_ACTIVITY_PENDING_STARTS].get(
+        webhook_id
+    )
+    if device_pending is None:
         return False
-    if dt_util.utcnow() - sent_at < timedelta(
+    sent_at = device_pending.get(activity_tag)
+    if sent_at is None:
+        return False
+    return dt_util.utcnow() - sent_at < timedelta(
         seconds=LIVE_ACTIVITY_START_COOLDOWN_SECONDS
-    ):
-        return True
-    clear_start_pending(hass, webhook_id, activity_tag)
-    return False
+    )
 
 
 @callback

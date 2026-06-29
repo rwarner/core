@@ -5,6 +5,7 @@ from collections.abc import AsyncGenerator
 from datetime import timedelta
 from http import HTTPStatus
 import logging
+from typing import Any
 from unittest.mock import patch
 
 from aiohttp import ClientError
@@ -1379,12 +1380,13 @@ async def test_notify_non_apple_device_skips_live_activity(
     }
 
 
-async def _setup_iphone_with_push_to_start(
+@pytest.fixture
+async def setup_iphone_with_push_to_start(
     hass: HomeAssistant,
     aioclient_mock: AiohttpClientMocker,
-    admin_user: MockUser,
+    hass_admin_user: MockUser,
 ) -> str:
-    """Register an Apple device with a push-to-start token and a mocked relay."""
+    """Register an Apple device with a push-to-start token; return its webhook_id."""
     push_url = "https://mobile-push.home-assistant.dev/push"
     now = dt_util.naive_now() + timedelta(hours=24)
     iso_time = now.strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -1419,7 +1421,7 @@ async def _setup_iphone_with_push_to_start(
             "os_name": "iOS",
             "os_version": "17.2",
             "supports_encryption": False,
-            "user_id": admin_user.id,
+            "user_id": hass_admin_user.id,
             "webhook_id": webhook_id,
         },
         domain=DOMAIN,
@@ -1436,13 +1438,11 @@ async def _setup_iphone_with_push_to_start(
 async def test_notify_live_activity_start_suppressed_within_cooldown(
     hass: HomeAssistant,
     aioclient_mock: AiohttpClientMocker,
-    hass_admin_user: MockUser,
+    setup_iphone_with_push_to_start: str,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     """A second START for the same tag inside the cooldown window is suppressed."""
-    webhook_id = await _setup_iphone_with_push_to_start(
-        hass, aioclient_mock, hass_admin_user
-    )
+    webhook_id = setup_iphone_with_push_to_start
 
     await hass.services.async_call(
         "notify",
@@ -1480,14 +1480,12 @@ async def test_notify_live_activity_start_suppressed_within_cooldown(
 async def test_notify_live_activity_start_allowed_after_cooldown_expires(
     hass: HomeAssistant,
     aioclient_mock: AiohttpClientMocker,
-    hass_admin_user: MockUser,
+    setup_iphone_with_push_to_start: str,
     freezer: FrozenDateTimeFactory,
 ) -> None:
     """Once the cooldown window passes, a fresh START for the same tag goes through."""
     freezer.move_to("2026-01-01 00:00:00+00:00")
-    webhook_id = await _setup_iphone_with_push_to_start(
-        hass, aioclient_mock, hass_admin_user
-    )
+    webhook_id = setup_iphone_with_push_to_start
 
     await hass.services.async_call(
         "notify",
@@ -1519,12 +1517,10 @@ async def test_notify_live_activity_start_allowed_after_cooldown_expires(
 async def test_notify_live_activity_token_clears_pending_start(
     hass: HomeAssistant,
     aioclient_mock: AiohttpClientMocker,
-    hass_admin_user: MockUser,
+    setup_iphone_with_push_to_start: str,
 ) -> None:
     """Reporting the per-activity token clears the pending start so updates can flow."""
-    webhook_id = await _setup_iphone_with_push_to_start(
-        hass, aioclient_mock, hass_admin_user
-    )
+    webhook_id = setup_iphone_with_push_to_start
 
     await hass.services.async_call(
         "notify",
@@ -1566,12 +1562,10 @@ async def test_notify_live_activity_token_clears_pending_start(
 async def test_notify_live_activity_clear_notification_releases_pending(
     hass: HomeAssistant,
     aioclient_mock: AiohttpClientMocker,
-    hass_admin_user: MockUser,
+    setup_iphone_with_push_to_start: str,
 ) -> None:
     """Sending clear_notification with a stored token releases any pending start."""
-    webhook_id = await _setup_iphone_with_push_to_start(
-        hass, aioclient_mock, hass_admin_user
-    )
+    webhook_id = setup_iphone_with_push_to_start
 
     await hass.services.async_call(
         "notify",
@@ -1604,3 +1598,97 @@ async def test_notify_live_activity_clear_notification_releases_pending(
     )
 
     assert hass.data[DOMAIN][DATA_LIVE_ACTIVITY_PENDING_STARTS] == {}
+
+
+async def test_notify_live_activity_stale_date_lifted_to_payload(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    setup_iphone_with_push_to_start: str,
+) -> None:
+    """A caller-supplied ``stale_date`` rides alongside the live_activity_token."""
+    webhook_id = setup_iphone_with_push_to_start
+    stale_date = dt_util.utcnow().timestamp() + 1800
+
+    await hass.services.async_call(
+        "notify",
+        "mobile_app_iphone",
+        {
+            "message": "Laundry started",
+            "target": [webhook_id],
+            "data": {
+                "live_update": True,
+                "tag": "laundry",
+                "stale_date": stale_date,
+            },
+        },
+        blocking=True,
+    )
+
+    assert len(aioclient_mock.mock_calls) == 1
+    call_json = aioclient_mock.mock_calls[0][2]
+    assert call_json["stale_date"] == stale_date
+    assert call_json["data"]["stale_date"] == stale_date
+
+
+async def test_notify_live_activity_without_stale_date_omits_key(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    setup_iphone_with_push_to_start: str,
+) -> None:
+    """When the caller omits ``stale_date``, no such key is added to the payload."""
+    webhook_id = setup_iphone_with_push_to_start
+
+    await hass.services.async_call(
+        "notify",
+        "mobile_app_iphone",
+        {
+            "message": "Laundry started",
+            "target": [webhook_id],
+            "data": {"live_update": True, "tag": "laundry"},
+        },
+        blocking=True,
+    )
+
+    assert "stale_date" not in aioclient_mock.mock_calls[0][2]
+
+
+@pytest.mark.parametrize(
+    "bad_value",
+    [
+        pytest.param(0, id="zero"),
+        pytest.param(-1, id="negative"),
+        pytest.param("not-a-number", id="string"),
+        pytest.param(True, id="bool-true"),
+    ],
+)
+async def test_notify_live_activity_invalid_stale_date_drops_push(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    setup_iphone_with_push_to_start: str,
+    caplog: pytest.LogCaptureFixture,
+    bad_value: Any,
+) -> None:
+    """An invalid stale_date is rejected and no push is sent."""
+    webhook_id = setup_iphone_with_push_to_start
+
+    with caplog.at_level(logging.WARNING):
+        await hass.services.async_call(
+            "notify",
+            "mobile_app_iphone",
+            {
+                "message": "Laundry started",
+                "target": [webhook_id],
+                "data": {
+                    "live_update": True,
+                    "tag": "laundry",
+                    "stale_date": bad_value,
+                },
+            },
+            blocking=True,
+        )
+
+    assert aioclient_mock.mock_calls == []
+    assert any(
+        "Live Activity stale_date must be a positive Unix timestamp" in record.message
+        for record in caplog.records
+    )

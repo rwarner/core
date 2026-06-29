@@ -8,12 +8,14 @@ from aiohttp.test_utils import TestClient
 from freezegun.api import FrozenDateTimeFactory
 
 from homeassistant.components.mobile_app.const import (
+    CONF_USER_ID,
+    DATA_CONFIG_ENTRIES,
     DATA_LIVE_ACTIVITY_PENDING_STARTS,
     DATA_LIVE_ACTIVITY_TOKENS,
     DOMAIN,
     EVENT_LIVE_ACTIVITY_STARTED,
 )
-from homeassistant.core import Event, EventOrigin, HomeAssistant
+from homeassistant.core import EventOrigin, HomeAssistant
 from homeassistant.util import dt as dt_util
 
 from tests.common import async_capture_events, async_fire_time_changed
@@ -256,13 +258,10 @@ async def test_webhook_live_activity_token_fires_started_event(
     create_registrations: tuple[dict[str, Any], dict[str, Any]],
     webhook_client: TestClient,
 ) -> None:
-    """Reporting a per-activity token fires the live_activity_started event.
-
-    Automations subscribe to this event to re-emit current state after the
-    device confirms it received the START push.
-    """
+    """The first per-activity token report fires ``mobile_app_live_activity_started``."""
     webhook_id = create_registrations[1]["webhook_id"]
-    events: list[Event] = async_capture_events(hass, EVENT_LIVE_ACTIVITY_STARTED)
+    entry = hass.data[DOMAIN][DATA_CONFIG_ENTRIES][webhook_id]
+    events = async_capture_events(hass, EVENT_LIVE_ACTIVITY_STARTED)
 
     resp = await webhook_client.post(
         f"/api/webhook/{webhook_id}",
@@ -281,7 +280,36 @@ async def test_webhook_live_activity_token_fires_started_event(
     assert len(events) == 1
     assert events[0].data == {"webhook_id": webhook_id, "tag": "washer_cycle"}
     assert events[0].origin is EventOrigin.remote
-    assert events[0].context.user_id is not None
+    assert events[0].context.user_id == entry.data[CONF_USER_ID]
+
+
+async def test_webhook_live_activity_token_rotation_does_not_refire_event(
+    hass: HomeAssistant,
+    create_registrations: tuple[dict[str, Any], dict[str, Any]],
+    webhook_client: TestClient,
+) -> None:
+    """A second token report for the same tag rotates the token without re-firing."""
+    webhook_id = create_registrations[1]["webhook_id"]
+    events = async_capture_events(hass, EVENT_LIVE_ACTIVITY_STARTED)
+
+    for token in ("a" * 64, "b" * 64):
+        resp = await webhook_client.post(
+            f"/api/webhook/{webhook_id}",
+            json={
+                "type": "live_activity_token",
+                "data": {
+                    "tag": "washer_cycle",
+                    "push_token": token,
+                    "expires_at": dt_util.utcnow().timestamp() + 3600,
+                },
+            },
+        )
+        assert resp.status == HTTPStatus.OK
+    await hass.async_block_till_done()
+
+    assert len(events) == 1
+    stored = hass.data[DOMAIN][DATA_LIVE_ACTIVITY_TOKENS][webhook_id]["washer_cycle"]
+    assert stored["token"] == "b" * 64
 
 
 async def test_webhook_live_activity_token_clears_pending_start(

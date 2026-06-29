@@ -51,6 +51,7 @@ ATTR_START_LIVE_ACTIVITY_TOKEN = "start_live_activity_token"
 ATTR_LIVE_ACTIVITY_TOKEN = "live_activity_token"
 ATTR_LIVE_ACTIVITY_EVENT = "event"
 ATTR_LIVE_ACTIVITY_EXPIRES_AT = "expires_at"
+ATTR_STALE_DATE = "stale_date"
 ATTR_TAG = "tag"
 
 ATTR_TOKEN = "token"
@@ -61,11 +62,7 @@ CLEAR_NOTIFICATION = "clear_notification"
 
 EVENT_LIVE_ACTIVITY_STARTED = f"{DOMAIN}_live_activity_started"
 
-# How long after dispatching a Live Activity START the same (webhook_id, tag) is
-# blocked from sending another START. Sized to cover typical offline windows;
-# the cooldown is released early when the device reports its per-activity token
-# or when the activity is explicitly ended.
-LIVE_ACTIVITY_START_COOLDOWN_SECONDS = 3600
+LIVE_ACTIVITY_START_COOLDOWN_SECONDS = 3600  # released early on token arrival or end
 
 ATTR_EVENT_DATA = "event_data"
 ATTR_EVENT_TYPE = "event_type"
