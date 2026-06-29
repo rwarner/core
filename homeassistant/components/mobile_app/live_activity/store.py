@@ -10,6 +10,7 @@ from homeassistant.helpers.event import async_call_later
 from homeassistant.util import dt as dt_util
 
 from ..const import (
+    ATTR_CONTENT_STATE,
     ATTR_LIVE_ACTIVITY_EXPIRES_AT,
     ATTR_TOKEN,
     DATA_LIVE_ACTIVITY_CLEANUP_CANCEL,
@@ -71,12 +72,11 @@ def remove_live_activity_token(
 
 @callback
 def mark_start_pending(hass: HomeAssistant, webhook_id: str, activity_tag: str) -> None:
-    """Record that a START push was just dispatched for this tag.
+    """Record a START push for the cooldown to read against.
 
-    APNs allows roughly ten push-to-start activations per bundle in a short
-    window before the OS silently refuses further starts; the cooldown read
-    against this record prevents a flood of queued STARTs from burning that
-    budget when a device is offline.
+    iOS rate-limits push-to-start activations per bundle (about 10 per short
+    window per Apple DTS). The cooldown skips repeat STARTs for the same tag
+    so an offline device cannot drain that budget.
     """
     pending = hass.data[DOMAIN][DATA_LIVE_ACTIVITY_PENDING_STARTS]
     pending.setdefault(webhook_id, {})[activity_tag] = dt_util.utcnow()
@@ -117,19 +117,16 @@ def store_live_activity_state(
     webhook_id: str,
     activity_tag: str,
     content_state: dict[str, Any],
-    stale_date: float | None = None,
 ) -> None:
-    """Record the canonical Live Activity state for ``(webhook_id, tag)``.
+    """Record the current Live Activity state for ``(webhook_id, tag)``.
 
-    Single-slot per activity — calling again overwrites the prior entry. The
-    register holds the latest canonical state the dispatcher reads from on
-    each fire; it is not a queue of pending messages.
+    Single slot per activity; calling again overwrites the prior entry. The
+    dispatcher reads from this slot on every fire.
     """
     register = hass.data[DOMAIN][DATA_LIVE_ACTIVITY_STATE_REGISTER]
-    entry = {"content_state": content_state}
-    if stale_date is not None:
-        entry["stale_date"] = stale_date
-    register.setdefault(webhook_id, {})[activity_tag] = entry
+    register.setdefault(webhook_id, {})[activity_tag] = {
+        ATTR_CONTENT_STATE: content_state,
+    }
 
 
 @callback
@@ -154,6 +151,16 @@ def clear_live_activity_state(
     device_state.pop(activity_tag, None)
     if not device_state:
         del register[webhook_id]
+
+
+@callback
+def has_live_activity_token(
+    hass: HomeAssistant, webhook_id: str, activity_tag: str
+) -> bool:
+    """Return whether a per-activity token is stored for ``(webhook_id, tag)``."""
+    return activity_tag in hass.data[DOMAIN][DATA_LIVE_ACTIVITY_TOKENS].get(
+        webhook_id, {}
+    )
 
 
 @callback

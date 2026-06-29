@@ -1,25 +1,15 @@
-"""Service action that records canonical Live Activity state.
-
-The action's contract is intentionally narrow: it writes ``content_state`` for
-``(webhook_id, tag)`` into the register and asks the dispatcher to reconcile.
-Success means the state was recorded, not that a push reached the device.
-"""
-# pylint: disable=home-assistant-use-runtime-data  # Uses legacy hass.data[DOMAIN] pattern
-
-from typing import Any
+"""Service action that records Live Activity state for ``(webhook_id, tag)``."""
 
 import voluptuous as vol
 
-from homeassistant.const import ATTR_DEVICE_ID
+from homeassistant.const import ATTR_DEVICE_ID, CONF_WEBHOOK_ID
 from homeassistant.core import HomeAssistant, ServiceCall, callback
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv, device_registry as dr
 
 from ..const import (
     ATTR_CONTENT_STATE,
-    ATTR_STALE_DATE,
     ATTR_TAG,
-    DATA_CONFIG_ENTRIES,
     DOMAIN,
     SERVICE_SET_LIVE_ACTIVITY_STATE,
 )
@@ -31,7 +21,6 @@ SET_LIVE_ACTIVITY_STATE_SCHEMA = vol.Schema(
         vol.Required(ATTR_DEVICE_ID): cv.string,
         vol.Required(ATTR_TAG): cv.string,
         vol.Required(ATTR_CONTENT_STATE): dict,
-        vol.Optional(ATTR_STALE_DATE): cv.positive_float,
     }
 )
 
@@ -48,36 +37,28 @@ def async_register_services(hass: HomeAssistant) -> None:
 
 
 async def _handle_set_live_activity_state(call: ServiceCall) -> None:
-    """Record the canonical state, then ask the dispatcher to reconcile."""
+    """Record the state, then ask the dispatcher to reconcile."""
     hass = call.hass
     webhook_id = _webhook_id_for_device(hass, call.data[ATTR_DEVICE_ID])
-    tag: str = call.data[ATTR_TAG]
-    store_live_activity_state(
-        hass,
-        webhook_id,
-        tag,
-        call.data[ATTR_CONTENT_STATE],
-        call.data.get(ATTR_STALE_DATE),
-    )
+    tag = call.data[ATTR_TAG]
+    store_live_activity_state(hass, webhook_id, tag, call.data[ATTR_CONTENT_STATE])
     await dispatch_live_activity_state(hass, webhook_id, tag)
 
 
 def _webhook_id_for_device(hass: HomeAssistant, device_id: str) -> str:
     """Resolve a device id to the webhook_id of its mobile_app entry."""
     device = dr.async_get(hass).async_get(device_id)
-    if device is None:
-        raise HomeAssistantError(
+    if device is None or device.primary_config_entry is None:
+        raise ServiceValidationError(
             translation_domain=DOMAIN,
             translation_key="live_activity_unknown_device",
             translation_placeholders={"device_id": device_id},
         )
-    config_entries: dict[str, Any] = hass.data[DOMAIN][DATA_CONFIG_ENTRIES]
-    for entry_id in device.config_entries:
-        for webhook_id, entry in config_entries.items():
-            if entry.entry_id == entry_id:
-                return webhook_id
-    raise HomeAssistantError(
-        translation_domain=DOMAIN,
-        translation_key="live_activity_unknown_device",
-        translation_placeholders={"device_id": device_id},
-    )
+    entry = hass.config_entries.async_get_entry(device.primary_config_entry)
+    if entry is None or entry.domain != DOMAIN:
+        raise ServiceValidationError(
+            translation_domain=DOMAIN,
+            translation_key="live_activity_unknown_device",
+            translation_placeholders={"device_id": device_id},
+        )
+    return entry.data[CONF_WEBHOOK_ID]

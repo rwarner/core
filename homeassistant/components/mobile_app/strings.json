@@ -37,7 +37,7 @@
   },
   "services": {
     "set_live_activity_state": {
-      "description": "Records the canonical Live Activity state for a tag. Home Assistant reconciles it to the device when the dispatcher can reach the device; success means the state was recorded, not that the device has received it yet.",
+      "description": "Records the current Live Activity state for a tag. Success means the state was recorded; the device receives it on the next reachable dispatch.",
       "fields": {
         "device_id": {
           "description": "The mobile_app device whose Live Activity state is being set.",
@@ -50,10 +50,6 @@
         "content_state": {
           "description": "Content state dictionary delivered to the Live Activity widget. Overwrites any prior state for the same tag.",
           "name": "Content state"
-        },
-        "stale_date": {
-          "description": "Optional Unix timestamp after which iOS visibly flags the activity as stale until a fresh update arrives.",
-          "name": "Stale date"
         }
       },
       "name": "Set Live Activity state"

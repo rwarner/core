@@ -15,9 +15,3 @@ set_live_activity_state:
       example: '{"status": "out for delivery", "eta_minutes": 12}'
       selector:
         object:
-    stale_date:
-      required: false
-      example: 1750000000
-      selector:
-        number:
-          mode: box

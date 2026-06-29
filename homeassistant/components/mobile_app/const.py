@@ -62,11 +62,10 @@ CLEAR_NOTIFICATION = "clear_notification"
 
 EVENT_LIVE_ACTIVITY_STARTED = f"{DOMAIN}_live_activity_started"
 
-LIVE_ACTIVITY_START_COOLDOWN_SECONDS = 3600  # released on token arrival or end
+LIVE_ACTIVITY_START_COOLDOWN_SECONDS = 3600
 
 SERVICE_SET_LIVE_ACTIVITY_STATE = "set_live_activity_state"
 ATTR_CONTENT_STATE = "content_state"
-ATTR_STALE_DATE = "stale_date"
 
 ATTR_EVENT_DATA = "event_data"
 ATTR_EVENT_TYPE = "event_type"

@@ -16,15 +16,13 @@ from ..const import (
     ATTR_PUSH_TOKEN,
     ATTR_TAG,
     ATTR_WEBHOOK_ID,
-    DATA_LIVE_ACTIVITY_TOKENS,
-    DOMAIN,
     EVENT_LIVE_ACTIVITY_STARTED,
 )
 from ..helpers import empty_okay_response, registration_context
 from ..webhook import WEBHOOK_COMMANDS, validate_schema
 from .dispatcher import dispatch_live_activity_state
 from .store import (
-    get_live_activity_state,
+    has_live_activity_token,
     remove_live_activity_token,
     store_live_activity_token,
 )
@@ -41,22 +39,15 @@ from .store import (
 async def webhook_update_live_activity_token(
     hass: HomeAssistant, config_entry: ConfigEntry, data: dict[str, Any]
 ) -> Response:
-    """Store a per-activity token; if state is recorded, reconcile it now.
+    """Store a per-activity token and reconcile any recorded state.
 
-    Token arrival is the device confirming receipt of the START. If the
-    register holds state for this tag — which it does when the automation has
-    advanced past the original START while the device was offline — the
-    dispatcher fires a single UPDATE so the activity catches up to current
-    state without the server holding any prior message. The first token
-    report for ``(webhook_id, tag)`` also fires
-    ``mobile_app_live_activity_started`` so automations can observe the
-    confirmation; later token rotations rotate the stored token silently.
+    The first token report for ``(webhook_id, tag)`` also fires
+    ``mobile_app_live_activity_started``; later token rotations update the
+    stored token silently.
     """
     webhook_id = config_entry.data[CONF_WEBHOOK_ID]
     tag = data[ATTR_TAG]
-    is_first_token = tag not in hass.data[DOMAIN][DATA_LIVE_ACTIVITY_TOKENS].get(
-        webhook_id, ()
-    )
+    is_first_token = not has_live_activity_token(hass, webhook_id, tag)
     store_live_activity_token(
         hass,
         webhook_id,
@@ -64,8 +55,7 @@ async def webhook_update_live_activity_token(
         data[ATTR_PUSH_TOKEN],
         data[ATTR_LIVE_ACTIVITY_EXPIRES_AT],
     )
-    if get_live_activity_state(hass, webhook_id, tag) is not None:
-        await dispatch_live_activity_state(hass, webhook_id, tag)
+    await dispatch_live_activity_state(hass, webhook_id, tag)
     if is_first_token:
         hass.bus.async_fire(
             EVENT_LIVE_ACTIVITY_STARTED,
